@@ -1,0 +1,13 @@
+{
+  "trial_number": 1,
+  "environment": "Cluttered Indoor",
+  "start_time": "2026-04-19T15:30:13.692719",
+  "duration_minutes": 2.01626797914505,
+  "peak_memory_mb": 2872.26171875,
+  "avg_memory_mb": 2823.5931658878503,
+  "avg_cpu_percent": 2.5373831775700935,
+  "avg_gpu_percent": 0,
+  "memory_stayed_below_6800mb": true,
+  "oom_occurred": false,
+  "num_samples": 107
+}

@@ -1,0 +1,13 @@
+{
+  "trial_number": 2,
+  "environment": "Open Field",
+  "start_time": "2026-04-19T15:32:14.670406",
+  "duration_minutes": 2.0152239481608074,
+  "peak_memory_mb": 2787.69140625,
+  "avg_memory_mb": 2782.3814617406542,
+  "avg_cpu_percent": 2.194392523364486,
+  "avg_gpu_percent": 0,
+  "memory_stayed_below_6800mb": true,
+  "oom_occurred": false,
+  "num_samples": 107
+}

@@ -1,0 +1,30 @@
+{
+  "report_type": "Standardized Performance Metrics",
+  "device": "jetson_only",
+  "timestamp": "2026-04-19T15:38:32.279971",
+  "collection_duration_seconds": 1.0995733737945557,
+  "metrics": {
+    "frame_processing_time_ms": 20.108094542906933,
+    "tracking_time_ms": 20.112032116566983,
+    "mapping_time_ms": 20.065296830221687,
+    "total_latency_ms": 20.108094542906933,
+    "ate_rmse_m": 0.0,
+    "ate_mean_m": 0.0,
+    "ate_median_m": 0.0,
+    "rpe_trans_rmse_m": 0.0,
+    "rpe_rot_rmse_deg": 0.0,
+    "energy_per_frame_j": 0.01645414611950214,
+    "avg_power_w": 14.992041866337118,
+    "total_energy_j": 16.45414611950214,
+    "peak_memory_mb": 6080.460379941024,
+    "avg_memory_mb": 5288.266773606817,
+    "memory_utilization": 0.8941853499913271,
+    "fps": 49.73121634504881,
+    "total_frames": 1000
+  },
+  "raw_data": {
+    "num_frames": 1000,
+    "num_power_samples": 1000,
+    "num_memory_samples": 1000
+  }
+}

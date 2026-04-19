@@ -1,0 +1,46 @@
+# Experiment Configuration
+
+# Incremental Map Compression
+compression:
+  max_memory_gb: 6.8
+  compression_threshold: 0.85
+  num_trials: 50
+  duration_minutes: 30
+  environments:
+    - name: "Dense Forest"
+      keypoints: 500
+      movement: 0.5
+    - name: "Cluttered Indoor"
+      keypoints: 400
+      movement: 0.7
+    - name: "Open Field"
+      keypoints: 150
+      movement: 1.2
+
+# Standard Benchmark
+benchmark:
+  datasets:
+    - EuRoC_MAV
+    - KITTI
+  num_runs: 5
+  max_keypoints: 2000
+  feature_threshold: 0.01
+
+# Performance Metrics
+metrics:
+  collection_interval: 1.0  # seconds
+  power_samples_per_trial: 1000
+  memory_samples_per_trial: 1000
+
+# Endurance Stress Test
+stress_test:
+  duration_hours: 4.5
+  battery_cycles: 20
+  thermal_limit_cpu: 85  # Celsius
+  thermal_limit_gpu: 80  # Celsius
+
+# Physical Tests
+physical_tests:
+  num_trials: 50
+  duration_minutes: 30
+  sample_interval: 1.0  # seconds

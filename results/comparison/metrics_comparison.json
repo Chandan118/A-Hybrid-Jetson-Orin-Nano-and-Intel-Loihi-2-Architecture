@@ -1,0 +1,38 @@
+{
+  "jetson_score": 0.4662233333333333,
+  "hybrid_score": 0.6836533333333333,
+  "score_improvement": 46.636447482251,
+  "hybrid_wins": true,
+  "individual_improvements": [
+    {
+      "metric": "FPS",
+      "improvement_percent": 69.5958174140358
+    },
+    {
+      "metric": "Energy/Frame (J)",
+      "improvement_percent": 23.63636363636364
+    },
+    {
+      "metric": "Latency (ms)",
+      "improvement_percent": 41.02436598707111
+    },
+    {
+      "metric": "Power (W)",
+      "improvement_percent": 23.48232154769846
+    }
+  ],
+  "jetson_metrics": {
+    "fps": 49.73,
+    "energy_per_frame_j": 0.0165,
+    "total_latency_ms": 20.11,
+    "avg_power_w": 14.99,
+    "frame_processing_time_ms": 20.11
+  },
+  "hybrid_metrics": {
+    "fps": 84.34,
+    "energy_per_frame_j": 0.0126,
+    "total_latency_ms": 11.86,
+    "avg_power_w": 11.47,
+    "frame_processing_time_ms": 11.86
+  }
+}

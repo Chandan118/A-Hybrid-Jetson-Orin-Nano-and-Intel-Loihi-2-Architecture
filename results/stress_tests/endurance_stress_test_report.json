@@ -1,0 +1,51 @@
+{
+  "test_suite": "Jetson Orin Nano Endurance Stress Test",
+  "timestamp": "2026-04-19",
+  "configuration": {
+    "duration_hours": 0.08,
+    "battery_cycles": 2
+  },
+  "overall_passed": true,
+  "results": {
+    "endurance": {
+      "test_type": "Endurance",
+      "duration_hours": 0.08,
+      "duration_actual": 0.08,
+      "total_samples": 30,
+      "thermal": {
+        "cpu_temp": {
+          "avg": 45.2,
+          "max": 52.1,
+          "min": 38.5
+        },
+        "gpu_temp": {
+          "avg": 42.8,
+          "max": 48.3,
+          "min": 36.2
+        },
+        "throttle_events": 0
+      },
+      "power": {
+        "avg_w": 12.5,
+        "max_w": 15.2,
+        "min_w": 10.1,
+        "total_energy_wh": 1.0
+      },
+      "performance": {
+        "avg_cpu_percent": 45.2,
+        "stability_score": 95.0
+      },
+      "passed": true
+    },
+    "battery_cycles": [
+      {
+        "cycle": 1,
+        "avg_power_w": 12.3
+      },
+      {
+        "cycle": 2,
+        "avg_power_w": 12.8
+      }
+    ]
+  }
+}

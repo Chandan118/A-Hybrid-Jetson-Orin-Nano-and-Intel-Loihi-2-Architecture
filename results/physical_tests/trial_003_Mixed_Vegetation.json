@@ -1,0 +1,13 @@
+{
+  "trial_number": 3,
+  "environment": "Mixed Vegetation",
+  "start_time": "2026-04-19T15:34:15.585306",
+  "duration_minutes": 2.015602954228719,
+  "peak_memory_mb": 2790.19140625,
+  "avg_memory_mb": 2782.231965537383,
+  "avg_cpu_percent": 2.4028037383177567,
+  "avg_gpu_percent": 0,
+  "memory_stayed_below_6800mb": true,
+  "oom_occurred": false,
+  "num_samples": 107
+}

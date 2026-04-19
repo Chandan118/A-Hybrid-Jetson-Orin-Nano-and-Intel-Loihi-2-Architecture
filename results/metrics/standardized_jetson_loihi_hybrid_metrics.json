@@ -1,0 +1,30 @@
+{
+  "report_type": "Standardized Performance Metrics",
+  "device": "jetson_loihi_hybrid",
+  "timestamp": "2026-04-19T15:38:33.382427",
+  "collection_duration_seconds": 1.1010913848876953,
+  "metrics": {
+    "frame_processing_time_ms": 11.857080355410748,
+    "tracking_time_ms": 11.844715743623986,
+    "mapping_time_ms": 11.75087792776852,
+    "total_latency_ms": 11.857080355410748,
+    "ate_rmse_m": 0.0,
+    "ate_mean_m": 0.0,
+    "ate_median_m": 0.0,
+    "rpe_trans_rmse_m": 0.0,
+    "rpe_rot_rmse_deg": 0.0,
+    "energy_per_frame_j": 0.012611701312828998,
+    "avg_power_w": 11.474550205815728,
+    "total_energy_j": 12.611701312828998,
+    "peak_memory_mb": 5039.630461017152,
+    "avg_memory_mb": 4266.33065539678,
+    "memory_utilization": 0.7411221266201694,
+    "fps": 84.33779396153535,
+    "total_frames": 1000
+  },
+  "raw_data": {
+    "num_frames": 1000,
+    "num_power_samples": 1000,
+    "num_memory_samples": 1000
+  }
+}

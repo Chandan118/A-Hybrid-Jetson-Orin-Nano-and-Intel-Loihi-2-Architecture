@@ -1,0 +1,7 @@
+{
+  "experiment": "Incremental Map Compression",
+  "trials": 5,
+  "oom_crashes": 0,
+  "crash_rate_percent": 0.0,
+  "target_achieved": true
+}
