@@ -5,13 +5,17 @@ echo "=============================================="
 echo "JETSON ORIN NANO EXPERIMENT SUITE"
 echo "=============================================="
 
-cd /home/jetson/jetson_slam_experiments
+cd "$(dirname "$0")"
 
 echo ""
 echo "Running all experiments..."
 echo ""
 
-python3 src/run_all_experiments.py
+if [ -f exp_rev1/run_all.sh ]; then
+  bash exp_rev1/run_all.sh
+else
+  python3 src/run_all_experiments.py
+fi
 
 echo ""
 echo "=============================================="

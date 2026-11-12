@@ -1,11 +1,25 @@
 #!/usr/bin/env python3
 """
+WARNING: THIS SCRIPT GENERATES A SYNTHETIC FIGURE.
+
+The values it draws are hard-coded or come from `np.random`; they were
+never measured.  It is kept in the repository only as evidence for the
+provenance audit in `exp_rev1/results/provenance_audit.json`.
+
+DO NOT RUN THIS: it will overwrite the MEASURED figure with a synthetic
+one.  The measured figures are produced by
+`exp_rev1/make_paper_figures.py` from `exp_rev1/results/`.
+
+Original description follows.
 Figure S2. Dynamic Memory Utilization Across Visually Complex Environments.
 Line graph demonstrating the bounded memory consumption of the physical Jetson Orin Nano utilizing
 the incremental map compression algorithm. Across Cluttered Indoor, Open Field, and Mixed Vegetation
 environments, memory usage stabilizes rapidly and remains safely below the 6,800 MB critical failure
-threshold, eliminating the previously observed 18% Out-of-Memory crash rate.
+threshold. The measured failure rate is 0 in 67 sensor replays versus 5 of 67
+for Jetson-only (Fisher exact p = 0.058 two-sided; 95% one-sided
+Clopper-Pearson upper bound 4.37% on the failure rate).
 """
+
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -64,7 +78,7 @@ ax.annotate('Peak: 2872 MB', xy=(2, 2872.26), xytext=(1.5, 2950),
             arrowprops=dict(arrowstyle='->', color='#1f77b4', lw=1.5))
 
 # Add OOM crash rate annotation
-ax.text(0.98, 0.95, 'OOM Crash Rate: 0%\n(Previous: 18%)', 
+ax.text(0.98, 0.95, 'Memory-cap failures: 0 in 67 replays\n(Jetson-only: 5 of 67 = 7.46%)', 
         transform=ax.transAxes, fontsize=11, fontweight='bold',
         verticalalignment='top', horizontalalignment='right',
         bbox=dict(boxstyle='round', facecolor='lightgreen', alpha=0.8, edgecolor='green'))

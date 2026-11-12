@@ -1,9 +1,21 @@
 #!/usr/bin/env python3
 """
+WARNING: THIS SCRIPT GENERATES A SYNTHETIC FIGURE.
+
+The values it draws are hard-coded or come from `np.random`; they were
+never measured.  It is kept in the repository only as evidence for the
+provenance audit in `exp_rev1/results/provenance_audit.json`.
+
+DO NOT RUN THIS: it will overwrite the MEASURED figure with a synthetic
+one.  The measured figures are produced by
+`exp_rev1/make_paper_figures.py` from `exp_rev1/results/`.
+
+Original description follows.
 Figure S1. Neuromorphic Acceleration: Throughput and Energy Efficiency.
 Bar charts comparing Jetson-only (GPU) vs Jetson+Loihi 2 (Hybrid) performance.
 Shows +69.6% throughput improvement and -23.6% energy reduction per frame.
 """
+
 
 import matplotlib.pyplot as plt
 import numpy as np

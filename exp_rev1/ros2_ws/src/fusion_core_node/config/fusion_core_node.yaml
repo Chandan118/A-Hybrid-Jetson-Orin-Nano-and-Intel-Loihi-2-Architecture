@@ -1,0 +1,16 @@
+# Parameters for the optimized C++ fusion core node.
+#
+# Loaded with:
+#   ros2 run fusion_core_node fusion_core_node --ros-args --params-file <this file>
+#
+fusion_core_node:
+  ros__parameters:
+    # int8 / sparse-CSR weights produced by common/export_int8_sparse.py
+    weights_path: "/home/jetson/A-Hybrid-Jetson-Orin-Nano-and-Intel-Loihi-2-Architecture/exp_rev1/common/fusion_weights_int8_sparse.bin"
+    frame_id: "base_link"
+    # the same 50 Hz rate used by every other configuration
+    rate_hz: 50.0
+    # pinned ARM cores: 0-3 are the big cores, 4-5 the little ones
+    cpu_affinity_lo: 0
+    cpu_affinity_hi: 3
+    publish_spikes: true

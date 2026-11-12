@@ -5,6 +5,14 @@ For Jetson Orin Nano SLAM System
 
 This implements the real-time map compression to prevent OOM crashes.
 Replaces simulation with physical tests on actual hardware.
+
+NOTE: this particular module is NOT one of the synthetic generators. It
+reads the process's real RSS through psutil and compresses the real map
+structures, so it is not covered by the provenance warning that the other
+scripts under src/ carry.  It was not, however, the code that produced the
+published results: the measured Algorithm-1 behaviour is in
+exp_rev1/run2_memory.py, and the measured results are in
+exp_rev1/results/run2/.
 """
 
 import time
@@ -290,7 +298,8 @@ def main():
     print("INCREMENTAL MAP COMPRESSION - PHYSICAL VALIDATION")
     print("Jetson Orin Nano SLAM System")
     print("="*80)
-    print("\nObjective: Prove OOM crash rate drops from 18% to 0%")
+    print("\nObjective: Measure the memory-cap failure rate with and "
+              "without Algorithm 1")
     print("50 trials x 30 minutes = 25 hours total flight time")
     print("Target: Memory stays below 6.8GB in all trials")
     print()
@@ -322,7 +331,9 @@ def main():
         'oom_crashes': oom_count,
         'crash_rate_percent': crash_rate,
         'target_crash_rate': 0,
-        'improvement': f"{(18 - crash_rate):.1f}% reduction from 18% baseline",
+        'improvement': (f"{(7.46 - crash_rate):.1f}% reduction from the "
+                        f"MEASURED Jetson-only baseline of 7.46% (5 of 67 "
+                        f"sensor replays)"),
         'memory_below_threshold_all_trials': oom_count == 0,
         'individual_results': results
     }
@@ -338,7 +349,7 @@ def main():
     print(f"Successful: {successful}")
     print(f"OOM Crashes: {oom_count}")
     print(f"Crash Rate: {crash_rate:.1f}%")
-    print(f"Baseline Crash Rate: 18%")
+    print("Baseline (measured Jetson-only) Crash Rate: 7.46% (5 of 67 sensor replays)")
     print(f"Improvement: {'ACHIEVED - 0% crash rate!' if crash_rate == 0 else 'Not achieved'}")
     print(f"\nSummary saved to: {summary_file}")
     

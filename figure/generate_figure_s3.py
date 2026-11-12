@@ -1,11 +1,23 @@
 #!/usr/bin/env python3
 """
+WARNING: THIS SCRIPT GENERATES A SYNTHETIC FIGURE.
+
+The values it draws are hard-coded or come from `np.random`; they were
+never measured.  It is kept in the repository only as evidence for the
+provenance audit in `exp_rev1/results/provenance_audit.json`.
+
+DO NOT RUN THIS: it will overwrite the MEASURED figure with a synthetic
+one.  The measured figures are produced by
+`exp_rev1/make_paper_figures.py` from `exp_rev1/results/`.
+
+Original description follows.
 Figure S3. Thermal Profile During Sustained Endurance Stress Testing.
 Thermal tracking over continuous multi-cycle operational testing. Both CPU (Peak: 52.1°C) and GPU (Peak: 48.3°C) 
 maintain highly stable operating temperatures. The absence of thermal spikes indicates that neuromorphic 
 offloading successfully prevents computational bottlenecks, resulting in zero thermal throttling events 
 over extended mission durations.
 """
+
 
 import matplotlib.pyplot as plt
 import numpy as np

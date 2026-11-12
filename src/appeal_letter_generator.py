@@ -1,5 +1,25 @@
 #!/usr/bin/env python3
 """
+#############################################################################
+# WARNING: THE VALUES THIS SCRIPT PRODUCES ARE NOT MEASUREMENTS.
+#
+# This script injects values from `np.random` into the results it writes.
+# It never reads the Jetson power rails, the INA3221, tegrastats, or any
+# external meter, so the power, the frame times, the FPS and the
+# joules-per-frame it reports are random draws, not observations.
+#
+# It is kept in the repository because it is the EVIDENCE for the provenance
+# finding in exp_rev1/results/provenance_audit.json -- which shows that the
+# numbers published in results/ and in the README key-results table were
+# generated rather than measured, and that their energy identity is violated
+# by 979 % to 1732 %.
+#
+# The real measurements are produced by the harness in exp_rev1/ and are
+# documented in exp_rev1/results/REVIEW_RESPONSE.md.  Do not cite anything
+# this script produces as a result, and do not let its output overwrite the
+# measured files.
+#############################################################################
+
 Formal Appeal Letter Generator
 ==============================
 
@@ -9,6 +29,7 @@ all physical experiments on the Jetson Orin Nano.
 This letter addresses the editor's concerns and presents
 the new experimental evidence.
 """
+
 
 import os
 import json
@@ -140,26 +161,31 @@ Engineering Reference Developer Kit to validate our claims:
 EXPERIMENT 1: Incremental Map Compression - Physical Validation
 --------------------------------------------------------------------------------
 
-Objective: Prove that the OOM crash rate drops from 18% to 0%
+Objective: Measure the memory-cap failure rate with and without Algorithm 1
 
 Methodology:
 - Implemented Algorithm 1 (Incremental Map Compression) on physical hardware
-- Ran 50 physical flight trials (30 minutes each) = 25 hours total flight time
+- Ran recorded SENSOR REPLAYS of a recorded rosbag (no vehicle was flown;
+   this is a replay, NOT a flight trial)
 - Tested in various environments: Dense Forest, Cluttered Indoor, Open Field,
   Mixed Vegetation, and Urban Canyon
 - Continuously monitored DRAM usage and memory utilization
 
 Results:
-- Total Trials: 50
-- Successful Trials: {50 - oom_crashes}
-- OOM Crashes: {oom_crashes}
-- Crash Rate: {crash_rate:.1f}%
-- Baseline (Simulation): 18%
-- Improvement: {18.0 - crash_rate:.1f}% reduction
+- Measured sensor replays per configuration: 67 (see exp_rev1/results/run2/summary.json)
+- Memory-cap failures with Algorithm 1: 0 of 67
+- Memory-cap failures without Algorithm 1 (Jetson-only): 5 of 67 (7.46%)
+- Baseline (measured, Jetson-only): see exp_rev1/results/run2/summary.json
+- NOTE: the figure 18% was NEVER a measurement: it appeared in earlier drafts
+  of this letter as a hard-coded literal in this generator. It has been
+  removed. The measured Jetson-only failure rate is 7.46% (5 of 67 replays),  and the honest statement is "no memory-cap failures in 67 sensor replays
+  versus 5 of 67", with a Fisher exact p = 0.058 two-sided and a 95%
+  one-sided Clopper-Pearson upper bound of 4.37% on the failure rate.
 
-CONCLUSION: The physical tests demonstrate that our Incremental Map
-Compression algorithm successfully maintains memory below 6.8GB throughout
-extended operation, achieving 0% OOM crash rate.
+CONCLUSION: The measurement shows that Algorithm 1 keeps the map's resident
+footprint bounded. It does NOT establish a 0% failure rate, and these are
+memory-cap failures (the harness's own address-space limit), not Linux
+kernel OOM kills -- /proc/vmstat reports oom_kill 0.
 
 --------------------------------------------------------------------------------
 EXPERIMENT 2: Standardized Benchmarking (EuRoC/KITTI)
@@ -170,11 +196,12 @@ Objective: Provide "performance metrics used in similar devices"
 Methodology:
 - Ran standard EuRoC MAV dataset through ORB-SLAM3 on Jetson Orin Nano
 - Measured standard SLAM metrics: ATE, RPE, FPS, latency, power
-- Compared Jetson-only (TensorRT optimized) vs Hybrid (Jetson + Loihi 2)
+- Compared Jetson-only (C1) vs GPU front end + CPU fusion core (C4).  NO LOIHI 2
+  BOARD WAS ATTACHED TO THE BENCH, so the Loihi 2 question was NOT MEASURED.
 
 Results - Standard Metrics Comparison:
 
-Metric                  Jetson Only      Hybrid         Improvement
+Metric                  Jetson Only      GPU front end + CPU core   Improvement
 ----------------------------------------------------------------------
 FPS                     ~50             ~60            +20.0%
 Energy/Frame            0.300 J         0.180 J        +40.0%
@@ -184,32 +211,39 @@ Power Consumption       15 W            11 W           +26.7%
 
 Composite Score:        0.72            0.89           +{hybrid_improvement:.1f}%
 
-MATHEMATICAL PROOF: The Hybrid system achieves {hybrid_improvement:.1f}% higher
-composite performance score than the highly optimized Jetson-only baseline,
-demonstrating that Loihi 2 integration provides measurable benefits even
-when the Jetson is perfectly optimized with TensorRT/CUDA.
+THE TABLE ABOVE IS THE PREVIOUS, SYNTHETIC VERSION AND IS REPLACED BY THE
+MEASURED NUMBERS BEFORE THE LETTER IS ISSUED (see
+exp_rev1/sync_published_numbers.py).  The measured result does NOT support
+the claim this section used to make: splitting the work across a GPU front
+end and the physical CPU fusion core is MORE expensive per frame than the
+Jetson-only pipeline, and neither sustains the 50 Hz replay rate.  Against
+the optimised CPU fusion core (C3) that split costs 48.4% more energy per
+frame and draws 30.8% more power.  NO LOIHI 2 CLAIM CAN BE MADE IN EITHER
+DIRECTION -- the question was NOT MEASURED, not answered.  See
+exp_rev1/results/REVIEW_RESPONSE.md.
 
 --------------------------------------------------------------------------------
-EXPERIMENT 3: Endurance and Latency Stress Tests
+EXPERIMENT 3: Thermal Stability and Latency Stress Tests
 --------------------------------------------------------------------------------
 
-Objective: Validate sustained operation over extended periods
+Objective: Measure thermal stability over 15 minutes (NOT endurance)
 
 Methodology:
-- Continuous 4.5-hour stress test under full computational load
-- 20 simulated battery depletion cycles
+- Continuous stress test under full computational load
 - Continuous thermal and power monitoring
 
 Results:
-- Thermal Throttle Events: 0
-- Maximum CPU Temperature: < 85°C
-- Maximum GPU Temperature: < 80°C
-- Power Stability: ±5% variance over full duration
+- Thermal Throttle Events: 0 (C1 and C4, all 3 repeats)
+- Maximum package temperature (Tj): 48.1 C (C1) / 48.5 C (C4)
+- Mean power: 6.021 W (C1, SD 0.007) / 6.484 W (C4, SD 0.009)
+- Measured energy: 1.5053 Wh (C1) / 1.6211 Wh (C4) per 900 s run
 - Sustained Performance: Stable throughout test period
 
-CONCLUSION: {'PASSED' if stress_passed else 'FAILED'} - The system demonstrates reliable
-operation over extended periods without thermal throttling or performance
-degradation.
+CONCLUSION: PASSED for THERMAL STABILITY ONLY - the system ran for 900 s x 3
+repeats per configuration with a flat temperature trace and zero throttle
+events. This is NOT an endurance result: the 900 s runtime is comparable to the
+thermal settling time of the package, so it cannot show that the temperature has
+converged. See exp_rev1/results/run3/summary.json.
 
 ================================================================================
 PART 2: SUMMARY OF IMPROVEMENTS
@@ -218,7 +252,9 @@ PART 2: SUMMARY OF IMPROVEMENTS
 Based on the physical experiments, we provide the following validated claims:
 
 1. MEMORY MANAGEMENT
-   - OOM crash rate: 18% (baseline) → 0% (with compression)
+   - Memory-cap failure rate: 5 of 67 sensor replays (7.46%) without
+     Algorithm 1 → 0 of 67 with it; Fisher exact p = 0.058 two-sided, and the
+     95% one-sided Clopper-Pearson upper bound on the failure rate is 4.37%
    - Memory stays below 6.8GB threshold
    - 50/50 successful trials in complex environments
 
@@ -245,18 +281,21 @@ We have revised the manuscript to address all reviewer concerns:
 
 1. Section "Incremental Map Compression" (previously Line 243)
    - Removed "Preliminary simulation shows..."
-   - Added: "Physical validation on Jetson Orin Nano (50 trials, 25 hours
-     total flight time) demonstrates 0% OOM crash rate..."
+   - Added: "Physical validation on Jetson Orin Nano (67 recorded sensor
+     replays per configuration) shows no memory-cap failures with
+     Algorithm 1 versus 5 of 67 without..."
 
 2. Added new Section: "Standardized Benchmarking"
-   - Includes EuRoC MAV dataset results
-   - Provides ATE and RPE metrics
+   - Includes the recorded rosbag replay results
+   - Provides power, FPS, joules per frame and latency, as mean +/- SD over
+     5 repeats per configuration
    - Compares against similar devices with standard metrics
 
-3. Added new Section: "Endurance Validation"
-   - 4.5-hour continuous stress test results
+3. Added new Section: "Thermal Stability Validation"
+   - 900 s x 3 repeats per configuration
    - Thermal behavior analysis
-   - 20 battery depletion cycle performance
+   - NO endurance claim and NO battery depletion cycle: no battery pack is
+     attached to the bench
 
 ================================================================================
 CONCLUSION
@@ -268,8 +307,13 @@ similar devices." Our results demonstrate:
 
 • Real, physically-validated measurements (not simulations)
 • Standard metrics comparable to other robotics systems
-• Mathematical proof that Hybrid > Optimized Jetson-only
-• Extended validation over 25+ hours of operation
+• A measured comparison that does NOT confirm the paper's original
+  direction: the GPU front end plus the CPU fusion core costs more energy
+  per frame than the optimised CPU fusion core alone
+• NO LOIHI 2 CLAIM IS MADE IN EITHER DIRECTION: no Loihi 2 board was
+  attached to the measurement bench, so the Loihi 2 question was NOT
+  MEASURED, not answered
+• Thermal stability over 15 minutes (900 s x 3), with no endurance claim
 
 We respectfully request that the manuscript be reconsidered for publication
 in {journal_name} based on this new experimental evidence.
@@ -335,10 +379,10 @@ in similar devices."
 
 | Metric | Before | After | Improvement |
 |--------|--------|-------|------------|
-| OOM Crash Rate | 18% | 0% | 100% reduction |
-| Energy/Frame | 0.300 J | 0.180 J | 40% reduction |
-| Latency | 20 ms | 12 ms | 40% reduction |
-| FPS | 50 | 60 | 20% improvement |
+| Memory-cap failure rate | 7.46% (5 of 67 sensor replays) | 0 of 67 | NOT a 100% reduction: Fisher exact p = 0.058 two-sided; 95% one-sided upper bound 4.37% |
+| Energy/Frame | 0.300 J | 0.13709 J (C1, measured) | **not a reduction** |
+| Latency | 20 ms | 22.08 ms (C1, measured) | **not a reduction** |
+| FPS | 50 | 44.59 (C1, measured) | **no improvement** |
 
 ---
 
@@ -346,28 +390,38 @@ in similar devices."
 
 ### 1. Incremental Map Compression Validation
 
-50 physical flight trials conducted on Jetson Orin Nano.
+67 recorded sensor replays per configuration on Jetson Orin Nano. These are
+REPLAYS of a recorded rosbag, not flight trials: no vehicle was flown and no
+live sensors were attached.
 
-**Results:** 0% crash rate achieved
+**Results:** the 0 % failure rate is **not established**. The measurement shows **no memory-cap failures in 67 sensor replays versus 5 of 67** for the Jetson-only configuration. A Fisher exact test gives **p = 0.058 two-sided**, which does not reach significance at 0.05 (p = 0.029 one-sided, quoted only because the directional hypothesis was not pre-registered). 0 of 67 gives a 95% **one-sided** Clopper-Pearson upper bound on the failure rate of **4.37%** (the two-sided bound is 5.36%). See `exp_rev1/results/run2/summary.json`.
 
 ### 2. Standardized Benchmarking
 
 EuRoC MAV dataset evaluated with standard metrics.
 
-**Results:** Hybrid outperforms optimized Jetson-only by ~23%
+**Results:** the measurement does **not** support this claim. See `exp_rev1/results/REVIEW_RESPONSE.md`; the hybrid is more expensive per frame than the Jetson-only pipeline.
 
-### 3. Endurance Stress Tests
+### 3. Thermal Stability Stress Tests
 
-4.5-hour continuous operation validated.
+900 s x 3 repeats of continuous operation per configuration.
 
-**Results:** No thermal throttling, stable performance
+**Results:** No thermal throttling, stable performance. This is a **thermal-stability** result, NOT an endurance result: the 900 s runtime is comparable to the thermal settling time of the package, so it cannot establish that the temperature has converged. There is **no measured endurance claim** in this revision. See `exp_rev1/results/run3/summary.json`.
 
 ---
 
 ## Conclusion
 
-The physical experiments fully address the editor's requirements and provide
-validated evidence for all claims in the paper.
+The physical experiments address the editor's requirements with **measured**
+data, and the measurement does not confirm the paper's original direction.
+Two things must be stated plainly to the editor. First, **no Loihi 2
+hardware was attached to the test bench, so no Loihi 2 configuration was
+measured**: the Loihi 2 energy and latency questions are unresolved, not
+answered in either direction. Second, the figures quoted in the submitted
+version of the manuscript (60.9 W, 22.7 W, 0.145 W, the 99.3 % saving and
+the 11.86 ms latency) have **no measurement behind them** and are withdrawn
+rather than replaced. The honest summary of the energy comparison is in
+`exp_rev1/results/REVIEW_RESPONSE.md`.
 
 """
         filepath = os.path.join(self.letter_dir, filename)

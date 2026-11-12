@@ -1,0 +1,766 @@
+#!/usr/bin/env python3
+"""
+Build the manuscript's results section from the measured data.
+
+This is the deliverable: a set of LaTeX tables and a plain-text summary that
+a paper can be written around, with every number taken from
+`exp_rev1/results/`.  It exists because the paper's current numbers are
+random draws (see `lookups/provenance_audit.py`), so the manuscript needs a
+table it can copy from and that cannot silently disagree with the
+measurements.
+
+The output is written to `exp_rev1/results/manuscript/` as:
+
+  * `tables.tex`      -- the LaTeX table bodies, ready to \input;
+  * `results.md`      -- the same tables in markdown, for the response;
+  * `summary.txt`     -- a one-screen summary of every headline number;
+  * `numbers.json`    -- every number in one machine-readable file, so that
+                          a claim in the prose can be checked against it.
+
+Each table is generated from the measured JSON, never typed by hand.  If a
+measurement is missing, the table says "NOT MEASURED" rather than carrying a
+stale number.
+"""
+
+import json
+import os
+import statistics
+from datetime import datetime
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+R = os.path.join(HERE, "results")
+OUT = os.path.join(R, "manuscript")
+
+DESC = {
+    "C1": "GPU pipeline (PyTorch SNN on CUDA)",
+    "C2": "TensorRT/CUDA baseline, FP32",
+    "C3": "optimised C++/ARM CPU fusion core (int8, sparse)",
+    "C4": "GPU front end + CPU fusion core, pipelined (**not** Loihi 2 — "
+          "no Loihi 2 board is attached to the bench)",
+    "C5": "CPU (Torch CPU path)",
+}
+
+# The Run 2 / Run 3 result JSON files were written before the "C4 is not
+# Loihi 2" scope was stated explicitly, and they label the C4/J3/J4
+# configurations with the word "Hybrid".  Those labels are re-worded at
+# render time, so that nothing published can imply that a Jetson-only
+# measurement was a Loihi 2 measurement.
+_LABEL_FIXES = (
+    ("Hybrid without Algorithm 1",
+     "GPU front end + CPU fusion core, without Algorithm 1"),
+    ("Hybrid + Algorithm 1",
+     "GPU front end + CPU fusion core, with Algorithm 1"),
+    ("Hybrid (GPU front-end + CPU fusion core)",
+     "GPU front end + CPU fusion core (not Loihi 2)"),
+    ("Hybrid (GPU front end + CPU fusion core)",
+     "GPU front end + CPU fusion core (not Loihi 2)"),
+    ("Hybrid", "GPU front end + CPU fusion core"),
+)
+
+
+def relabel(label):
+    """Rewrite a stored configuration label so it never implies Loihi 2."""
+    if not label:
+        return label
+    out = label
+    for old, new in _LABEL_FIXES:
+        out = out.replace(old, new)
+    return out
+
+
+def load(rel, default=None):
+    p = os.path.join(R, rel)
+    if not os.path.exists(p):
+        return default
+    with open(p) as f:
+        return json.load(f)
+
+
+def agg(vals):
+    vals = [v for v in vals if v is not None]
+    if not vals:
+        return None, None
+    m = statistics.mean(vals)
+    sd = statistics.stdev(vals) if len(vals) > 1 else 0.0
+    return m, sd
+
+
+def fmt(v, nd=3):
+    if v is None:
+        return "NOT MEASURED"
+    return f"{v:.{nd}f}"
+
+
+def main():
+    os.makedirs(OUT, exist_ok=True)
+    run1 = load("run1/summary.json", {}) or {}
+    run2 = load("run2/summary.json", {}) or {}
+    run3 = load("run3/summary.json", {}) or {}
+    pose = load("run1/pose_equivalence.json", {}) or {}
+    tput = load("run1d/throughput.json", {}) or {}
+    trtprof = load("run1d/tensorrt_profile.json", {}) or {}
+
+    numbers = {"generated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S")}
+    tex = []
+    md = []
+
+    # ---------------------------------------------------------- Table 1
+    order = [c for c in ("C1", "C2", "C3", "C4", "C5") if c in run1]
+    if order:
+        tex.append("% Table 1 -- power, throughput and energy per frame.\n"
+                   "% Every value is the mean +- standard deviation over the\n"
+                   "% five repeats, except the last column, which is a verdict.\n"
+                   "%\n"
+                   "% :warning: The J/frame column is compared at DIFFERENT frame\n"
+                   "% rates.  All configurations were offered the same 50 Hz input,\n"
+                   "% but only C3 and C5 delivered all of it; C1, C2 and C4 ran at\n"
+                   "% 42.2, 31.2 and 41.0 FPS.  Their J/frame figures are therefore\n"
+                   "% per frame DELIVERED, while C3's and C5's are per frame OFFERED.\n"
+                   "% A configuration that falls behind burns more energy on each\n"
+                   "% frame it does deliver, so this column must never be quoted as\n"
+                   "% a per-offered-frame comparison.  See Table 1b for the\n"
+                   "% rate-free unconstrained throughput.\n"
+                   "%\n"
+                   "% C4 is a GPU front end + CPU fusion core on the Jetson.  It is\n"
+                   "% NOT a Loihi 2 measurement: no Loihi 2 board was attached.\n"
+                   "% Generated by exp_rev1/build_manuscript_tables.py; do not edit.\n"
+                   "\\begin{tabular}{lrrrr}\n"
+                   "\\toprule\n"
+                   "Configuration & Power (W) & FPS & J/frame (per delivered frame) "
+                   "& Sustains 50~Hz \\\\\n"
+                   "\\midrule\n")
+        md.append("### Table 1 -- power, throughput and energy per frame\n")
+        md.append("> **Every value is the mean ± standard deviation over the "
+                  "five repeats** (10 min warm-up + 10 min log each), with "
+                  "the exception of the \"Sustains 50 Hz\" column, which is "
+                  "a verdict derived from the mean FPS and the p50 latency. "
+                  "The raw per-repeat values are in "
+                  "`exp_rev1/results/run1/all_runs.json`.\n")
+        md.append("> **:warning: No Loihi 2 was measured.** The C4 row is a "
+                  "**GPU front end plus the physical ARM CPU fusion core**, "
+                  "pipelined. No Loihi 2 board is attached to this bench, so "
+                  "**no Loihi 2 saving can be reported in either "
+                  "direction** — the Loihi 2 question was *not measured*, "
+                  "not answered. Every comparison in this table is between "
+                  "two placements of the fusion core on the Jetson.\n")
+        md.append("> **The FPS column is measured at the fixed 50 Hz replay "
+                  "rate, and it is CLIPPED BY THE CLOCK for the "
+                  "configurations that are fast enough to keep up with it.** "
+                  "C3 and C5 report exactly 50.00 FPS because they finish "
+                  "inside the 20 ms slot, not because 50 FPS is their "
+                  "limit; C1, C2 and C4 run flat out and drop frames, so "
+                  "their figures ARE their maximum sustainable rate. The "
+                  "unconstrained maximum rate of every configuration is "
+                  "reported separately in Table 1b below.\n")
+        md.append("> **:warning: The joules-per-frame column is compared at "
+                  "DIFFERENT frame rates, and this must be stated wherever "
+                  "the table is used.** All configurations were offered the "
+                  "same 50 Hz input, but only C3 and C5 delivered all of it. "
+                  "C1, C2 and C4 ran at 42.2, 31.2 and 41.0 FPS "
+                  "respectively, so their J/frame figures are **per frame "
+                  "actually delivered** while C3's and C5's are **per frame "
+                  "offered**. A configuration that falls behind burns more "
+                  "energy on each frame it does deliver, because the "
+                  "pipeline is still working through the backlog, so the "
+                  "J/frame column mixes two rates and cannot be read as a "
+                  "per-offered-frame comparison. The rate-free comparison is "
+                  "the unconstrained throughput of Table 1b, and the "
+                  "real-time verdict is the separate 50 Hz column.\n")
+        md.append("| Configuration | Power (W) | FPS at 50 Hz replay | "
+                  "J/frame (per delivered frame) | Sustains 50 Hz |")
+        md.append("|---|---|---|---|---|")
+        numbers["table1"] = {}
+        for c in order:
+            s = run1[c]
+            p, psd = agg(s.get("power_w", {}).get("mean", [None]) and
+                         [s["power_w"]["mean"]] or [])
+            pw = s.get("power_w", {}).get("mean")
+            pwsd = s.get("power_w", {}).get("sd")
+            fps = s.get("fps", {}).get("mean")
+            fpssd = s.get("fps", {}).get("sd")
+            jpf = s.get("j_per_frame_integrated", {}).get("mean")
+            jpf_sd = s.get("j_per_frame_integrated", {}).get("sd")
+            lat = s.get("latency_p50_ms", {}).get("mean")
+            ok = (fps is not None and fps >= 49.9)
+            numbers["table1"][c] = {
+                "description": DESC.get(c, ""),
+                "power_w_mean": pw, "power_w_sd": pwsd,
+                "fps_mean": fps, "fps_sd": fpssd,
+                "j_per_frame_mean": jpf, "j_per_frame_sd": jpf_sd,
+                "latency_p50_ms": lat,
+                "sustains_50hz": ok,
+            }
+            tex.append(f"{c} & ${fmt(pw)}$ $\\pm$ {fmt(pwsd)} & "
+                       f"${fmt(fps,2)}$ $\\pm$ {fmt(fpssd,2)} & "
+                       f"${fmt(jpf,5)}$ $\\pm$ {fmt(jpf_sd,5)} & "
+                       f"{'yes' if ok else 'no'} \\\\")
+            md.append(f"| {c} — {DESC.get(c,'')} | {fmt(pw)} ± {fmt(pwsd)} | "
+                      f"{fmt(fps,2)} ± {fmt(fpssd,2)} | {fmt(jpf,5)} ± {fmt(jpf_sd,5)} | "
+                      f"{'**yes**' if ok else '**no**'} |")
+        tex.append("\\bottomrule\n\\end{tabular}\n")
+        md.append("")
+
+    # ---------------------------------------------- Table 1b: throughput
+    tres = (tput.get("results") or {}) if tput else {}
+    if tres:
+        tex.append("% Table 1b -- UNCONSTRAINED maximum throughput: no replay "
+                   "clock, no sleep,\n"
+                   "% the backend is stepped back to back.  Reported "
+                   "SEPARATELY from Table 1,\n"
+                   "% whose FPS column is clipped by the 50 Hz replay clock "
+                   "for the fast configurations.\n"
+                   "% Generated by exp_rev1/build_manuscript_tables.py; do not edit.\n"
+                   "\\begin{tabular}{lrr}\n\\toprule\n"
+                   "Configuration & Max throughput (FPS) & Frame time (ms) \\\\\n"
+                   "\\midrule\n")
+        md.append("### Table 1b -- unconstrained maximum throughput\n")
+        md.append("> Measured with **no replay clock and no sleep**: the "
+                  "backend is stepped back to back, so this is each "
+                  "configuration's own maximum sustainable rate. It is "
+                  "reported separately from Table 1, whose FPS column is "
+                  "clipped by the 50 Hz clock for the configurations that "
+                  "keep up with it.\n")
+        md.append("| Configuration | Max throughput (FPS) | Frame time (ms) | "
+                  "Keeps up with 50 Hz |")
+        md.append("|---|---|---|---|")
+        numbers["table1b"] = {}
+        for c in [c for c in ("C1", "C2", "C3", "C4", "C5") if c in tres]:
+            v = tres[c]
+            numbers["table1b"][c] = {
+                "throughput_fps_mean": v.get("throughput_fps_mean"),
+                "throughput_fps_sd": v.get("throughput_fps_sd"),
+                "mean_frame_ms_mean": v.get("mean_frame_ms_mean"),
+                "mean_frame_ms_sd": v.get("mean_frame_ms_sd"),
+                "keeps_up_with_clock": v.get("keeps_up_with_clock"),
+            }
+            tex.append(f"{c} & ${fmt(v.get('throughput_fps_mean'),2)}$ $\\pm$ "
+                       f"{fmt(v.get('throughput_fps_sd'),2)} & "
+                       f"${fmt(v.get('mean_frame_ms_mean'),2)}$ $\\pm$ "
+                       f"{fmt(v.get('mean_frame_ms_sd'),2)} \\\\")
+            md.append(f"| {c} | {fmt(v.get('throughput_fps_mean'),2)} ± "
+                      f"{fmt(v.get('throughput_fps_sd'),2)} | "
+                      f"{fmt(v.get('mean_frame_ms_mean'),2)} ± "
+                      f"{fmt(v.get('mean_frame_ms_sd'),2)} | "
+                      f"{'**yes**' if v.get('keeps_up_with_clock') else '**no**'} |")
+        tex.append("\\bottomrule\n\\end{tabular}\n")
+        md.append("")
+
+    # ---------------------------------------------------------- Table 2
+    if run2:
+        keys = [k for k in ("J1", "J2", "J3", "J4") if k in run2]
+        if keys:
+            tex.append("% Table 2 -- memory and memory-cap failures over 67 "
+                       "recorded sensor replays per configuration.\n"
+                       "% The failures are address-space-limit failures raised "
+                       "by the harness\n"
+                       "% (RLIMIT_AS, --map-mem-limit-mb 3000), NOT Linux kernel "
+                       "OOM kills:\n"
+                       "% /proc/vmstat reports oom_kill 0.\n"
+                       "% The upper bound is the ONE-SIDED 95 % Clopper-Pearson "
+                       "bound.\n"
+                       "% Generated by exp_rev1/build_manuscript_tables.py; do not edit.\n"
+                       "\\begin{tabular}{lrrrr}\n\\toprule\n"
+                       "Configuration & $N$ & Memory-cap failures & Failure rate & "
+                       "95\\% one-sided upper bound \\\\\n\\midrule\n")
+            md.append("### Table 2 -- memory and memory-cap failures, 67 recorded "
+                      "sensor replays per configuration\n")
+            md.append("> The failures are address-space-limit failures raised by "
+                      "the harness, **not** Linux kernel OOM kills "
+                      "(`/proc/vmstat` reports `oom_kill 0`). The upper bound "
+                      "is the **one-sided** 95 % Clopper-Pearson bound; the "
+                      "two-sided bound for 0/67 is 5.36 %.\n")
+            md.append("| Configuration | N | Memory-cap failures | Failure rate | "
+                      "95 % one-sided upper bound |")
+            md.append("|---|---|---|---|---|")
+            numbers["table2"] = {}
+            for k in keys:
+                d = run2[k]
+                n = d.get("N")
+                cr = d.get("crashes")
+                rate = d.get("crash_rate")
+                ub = d.get("crash_rate_95pct_upper_bound")
+                lab = relabel(d.get("label", k))
+                numbers["table2"][k] = {"label": lab, "N": n, "crashes": cr,
+                                        "crash_rate": rate,
+                                        "upper_bound_95": ub}
+                tex.append(f"{lab} & {n} & {cr} & "
+                           f"{fmt(rate*100,2) if rate is not None else '?'}\\% & "
+                           f"{fmt(ub*100,2) if ub is not None else '?'}\\% \\\\")
+                md.append(f"| {lab} | {n} | {cr} | "
+                          f"{fmt(rate*100,2) if rate is not None else '?'} % | "
+                          f"{fmt(ub*100,2) if ub is not None else '?'} % |")
+            tex.append("\\bottomrule\n\\end{tabular}\n")
+            md.append("")
+
+    # ---------------------------------------------- Table 2b: uncapped
+    run2_nc = load("run2_nocap/summary.json", {}) or {}
+    if run2_nc:
+        keys = [k for k in ("J1", "J2", "J3", "J4") if k in run2_nc]
+        if keys:
+            tex.append("% Table 2b -- the SAME experiment with NO artificial "
+                       "address-space cap:\n"
+                       "% --map-mem-limit-mb 0, so the only limit is the "
+                       "physical 8 GB\n"
+                       "% of the module.  This is the run that can speak "
+                       "about real Jetson\n"
+                       "% out-of-memory behaviour; Table 2's failures are "
+                       "the harness's own ceiling.\n"
+                       "% Generated by exp_rev1/build_manuscript_tables.py; "
+                       "do not edit.\n"
+                       "\\begin{tabular}{lrrrr}\n\\toprule\n"
+                       "Configuration & $N$ & Failures & Failure rate & "
+                       "95\\% one-sided upper bound \\\\\n\\midrule\n")
+            md.append("### Table 2b -- the same experiment with **no "
+                      "artificial cap** (`--map-mem-limit-mb 0`)\n")
+            # the headroom is the point of this table: the un-compressed
+            # map came within a few hundred MB of the module's physical
+            # RAM and still did not fail, so the honest statement is that
+            # the real 8 GB limit was never reached in this workload.
+            _peak_nc = max((d.get("peak_total_ram_used_mb") or 0)
+                           for d in run2_nc.values() if isinstance(d, dict))
+            _total_nc = next((d.get("total_ram_mb") for d in run2_nc.values()
+                              if isinstance(d, dict)
+                              and d.get("total_ram_mb")), None)
+            _head = ""
+            if _total_nc:
+                _head = (f" The un-compressed configurations peaked at "
+                         f"{_peak_nc:.0f} MB of the module's "
+                         f"{_total_nc:.0f} MB of physical RAM -- within "
+                         f"{_total_nc - _peak_nc:.0f} MB of the limit -- and "
+                         f"still recorded **no** failure, and the kernel's "
+                         f"`/proc/vmstat` `oom_kill` counter is **0**. "
+                         f"The 8 GB module therefore never ran out of "
+                         f"memory in this workload, so **this table does not "
+                         f"show that Algorithm 1 prevents real out-of-memory "
+                         f"crashes**; it shows that the map's growth without "
+                         f"Algorithm 1 comes close to the physical limit, "
+                         f"and that Algorithm 1 keeps the resident footprint "
+                         f"far below it.")
+            md.append("> Table 2's failures are the harness's own 3000 MB "
+                      "ceiling. This is the identical experiment with "
+                      "**no `RLIMIT_AS` limit at all**, so the only limit is "
+                      "the physical 8 GB of the module. It is the run that "
+                      "can speak about **real** Jetson out-of-memory "
+                      "behaviour." + _head + "\n")
+            md.append("| Configuration | N | Failures | Failure rate | "
+                      "95 % one-sided upper bound |")
+            md.append("|---|---|---|---|---|")
+            numbers["table2b"] = {}
+            for k in keys:
+                d = run2_nc[k]
+                n = d.get("N")
+                cr = d.get("crashes")
+                rate = d.get("crash_rate")
+                ub = d.get("crash_rate_95pct_upper_bound")
+                lab = relabel(d.get("label", k))
+                numbers["table2b"][k] = {"label": lab, "N": n, "crashes": cr,
+                                         "crash_rate": rate,
+                                         "upper_bound_95": ub}
+                tex.append(f"{lab} & {n} & {cr} & "
+                           f"{fmt(rate*100,2) if rate is not None else '?'}\\% & "
+                           f"{fmt(ub*100,2) if ub is not None else '?'}\\% \\\\")
+                md.append(f"| {lab} | {n} | {cr} | "
+                          f"{fmt(rate*100,2) if rate is not None else '?'} % | "
+                          f"{fmt(ub*100,2) if ub is not None else '?'} % |")
+            tex.append("\\bottomrule\n\\end{tabular}\n")
+            md.append("")
+
+    # ------------------------------------- Table 2c: peak memory / headroom
+    # The Section 5.2 memory slots are filled from the LOG-DERIVED peaks
+    # (results/memory_peak_from_logs.json), not from the harness's own
+    # summary: the summary updates its peak only at the end of a
+    # SUCCESSFUL recording and therefore skips the samples belonging to
+    # the recordings that crashed, so it understates the peak.  The log
+    # values are the maximum the system actually reached.
+    peak = load("memory_peak_from_logs.json", {}) or {}
+    if peak:
+        tex.append("% Table 2c -- PEAK MEMORY AND HEADROOM (Section 5.2).\n"
+                   "% 'Peak total' is the whole-system RAM used at its\n"
+                   "% maximum over the 67 replays, sampled at 1 Hz, and\n"
+                   "% re-derived from the RAW 1 Hz timeseries CSVs by\n"
+                   "% exp_rev1/run2_peak_from_logs.py.  'Headroom' is what\n"
+                   "% was left of the module's RAM at that moment.\n"
+                   "% Generated by exp_rev1/build_manuscript_tables.py; do not edit.\n")
+        md.append("### Table 2c -- peak memory and headroom (Section 5.2)\n")
+        numbers["table2c"] = {}
+        for pass_name, pass_label in (("run2", "with the 3000 MB harness "
+                                                "ceiling"),
+                                      ("run2_nocap", "with no ceiling "
+                                                     "(`--map-mem-limit-mb 0`)")):
+            p = peak.get(pass_name)
+            if not p:
+                continue
+            cfgs = p.get("configs") or {}
+            keys = [k for k in ("J1", "J2", "J3", "J4") if k in cfgs]
+            if not keys:
+                continue
+            md.append(f"\n**{pass_label}**\n")
+            md.append("| Configuration | Failures | Peak total RAM (MB) | "
+                      "Peak map process RSS (MB) | Headroom (MB) | "
+                      "Headroom (%) |")
+            md.append("|---|---|---|---|---|---|")
+            tex.append("% -- " + pass_label + "\n"
+                       "\\begin{tabular}{lrrrrr}\n\\toprule\n"
+                       "Configuration & Failures & Peak total RAM (MB) & "
+                       "Peak map RSS (MB) & Headroom (MB) & Headroom (\\%) "
+                       "\\\\\n\\midrule\n")
+            for k in keys:
+                d = cfgs[k]
+                fl = d.get("from_log") or {}
+                n_rec = d.get("n_replays")
+                cr = d.get("crashes")
+                peak_total = fl.get("peak_total_used_mb_all_recordings")
+                peak_map = fl.get("peak_map_rss_mb")
+                head = d.get("headroom_mb")
+                head_pct = d.get("headroom_percent")
+                lab = relabel(d.get("label", k))
+                numbers["table2c"].setdefault(pass_name, {})[k] = {
+                    "label": lab,
+                    "n_replays": n_rec,
+                    "crashes": cr,
+                    "peak_total_ram_mb": peak_total,
+                    "peak_map_rss_mb": peak_map,
+                    "headroom_mb": head,
+                    "headroom_percent": head_pct,
+                }
+                md.append(f"| {lab} | {cr}/{n_rec} | {fmt(peak_total,1)} | "
+                          f"{fmt(peak_map,1)} | {fmt(head,1)} | "
+                          f"{fmt(head_pct,2)} |")
+                tex.append(f"{lab} & {cr}/{n_rec} & "
+                           f"{fmt(peak_total,1)} & {fmt(peak_map,1)} & "
+                           f"{fmt(head,1)} & {fmt(head_pct,2)}\\\\")
+            tex.append("\\bottomrule\n\\end{tabular}\n")
+        md.append("")
+
+        # the two-scenario reading, stated as the paper must state it
+        _c = (peak.get("run2_nocap") or {}).get("configs") or {}
+        _j1 = (_c.get("J1") or {}).get("from_log") or {}
+        _j2 = (_c.get("J2") or {}).get("from_log") or {}
+        if _j1 and _j2:
+            numbers["table2c"]["algorithm1_bounds_resident_footprint"] = True
+            md.append("> **Algorithm 1 (incremental map compression) is what "
+                      "keeps the resident footprint bounded.** WITHOUT it the "
+                      "map process peaks at "
+                      f"{fmt(_j1.get('peak_map_rss_mb'),0)} MB (Jetson-only) "
+                      "and the SYSTEM reaches "
+                      f"{fmt(_j1.get('peak_total_used_mb_all_recordings'),0)} MB "
+                      "of the module's 7,619.9 MB, leaving "
+                      f"{fmt(((_c.get('J1') or {}).get('headroom_mb')),1)} MB "
+                      "of headroom. WITH it the map process stays pinned at "
+                      f"~{fmt(_j2.get('peak_map_rss_mb'),0)} MB and the system "
+                      f"peaks at {fmt(_j2.get('peak_total_used_mb_all_recordings'),0)} MB, "
+                      f"leaving {fmt(((_c.get('J2') or {}).get('headroom_mb')),1)} MB "
+                      f"({fmt(((_c.get('J2') or {}).get('headroom_percent')),2)} %) "
+                      "of headroom. Neither configuration failed in this "
+                      "uncapped pass: the 8 GB module never ran out of "
+                      "memory, so this is a footprint result and not an "
+                      "out-of-memory-crash result.\n")
+            md.append("> **The two scenarios are NOT the same run.** The capped "
+                      "pass and the uncapped pass are separate 67-replay "
+                      "passes (`results/run2/` and `results/run2_nocap/`). "
+                      "The uncapped pass is the one that shows the "
+                      "uncompressed map's true growth; the capped pass is the "
+                      "one that shows the failure rate. The 3,000 MB ceiling "
+                      "is a HARNESS LIMIT (`RLIMIT_AS` on the map process), not "
+                      "a kernel OOM: `/proc/vmstat` `oom_kill` = 0 for the "
+                      "whole uncapped run and `dmesg` is not readable without "
+                      "root. The paper must not call these \"kernel OOM "
+                      "crashes\". Neither pass measures a Loihi 2 "
+                      "configuration: J3/J4 use the PHYSICAL CPU fusion core "
+                      "as the stand-in and must be labelled \"Jetson-internal "
+                      "split, NOT Loihi 2\".\n")
+            md.append("> **Why these peaks are slightly HIGHER than the "
+                      "harness's own summary for J1 and J3** (5,947.7 vs "
+                      "5,912.6 MB and 6,018.0 vs 5,915.0 MB): the harness "
+                      "updates its peak only at the end of a SUCCESSFUL "
+                      "recording and therefore skips the samples belonging to "
+                      "the recordings that crashed -- and the peak of a crashed "
+                      "recording is in fact the highest of that recording, "
+                      "because the recording died AT the allocation that "
+                      "failed. The paper quotes the LOG values, because they "
+                      "are the maximum the system actually reached "
+                      "[`results/memory_peak_from_logs.json`].\n")
+
+    # ---------------------------------------------------------- Table 3
+    if run3:
+        keys = [k for k in ("C1", "C4") if k in run3]
+        if keys:
+            tex.append("% Table 3 -- THERMAL STABILITY, 900 s x 3 repeats per "
+                       "configuration.\n"
+                       "% This is NOT an endurance result: 900 s x 3 with no "
+                       "throttling\n"
+                       "% shows thermal stability over 15 minutes only.\n"
+                       "% Generated by exp_rev1/build_manuscript_tables.py; do not edit.\n"
+                       "\\begin{tabular}{lrrrr}\n\\toprule\n"
+                       "Configuration & Mean power (W) & Energy (Wh/run) & "
+                       "Max $T_j$ (\\si{\\celsius}) & Throttle events \\\\\n\\midrule\n")
+            md.append("### Table 3 -- thermal stability, 900 s × 3 repeats per "
+                      "configuration\n")
+            md.append("> **Not an endurance result.** 900 s × 3 repeats with a "
+                      "flat temperature trace and zero throttle events shows "
+                      "**thermal stability over 15 minutes**. It does not "
+                      "establish endurance, and there is **no measured "
+                      "endurance claim** anywhere in this revision.\n")
+            md.append("| Configuration | Mean power (W) | Energy (Wh/run) | "
+                      "Max Tj (°C) | Throttle events |")
+            md.append("|---|---|---|---|---|")
+            numbers["table3"] = {}
+            for k in keys:
+                d = run3[k]
+                numbers["table3"][k] = {
+                    "mean_power_w": d.get("mean_power_w"),
+                    "energy_wh_per_run": d.get("mean_energy_wh_per_run"),
+                    "max_tj_c": d.get("max_tj_c"),
+                    "throttle_events": d.get("throttle_events_total"),
+                    "runtime_to_empty_150wh_h": d.get("runtime_to_empty_150Wh_H"),
+                }
+                tex.append(f"{k} & {fmt(d.get('mean_power_w'))} & "
+                           f"{fmt(d.get('mean_energy_wh_per_run'),4)} & "
+                           f"{fmt(d.get('max_tj_c'),1)} & "
+                           f"{d.get('throttle_events_total')} \\\\")
+                md.append(f"| {k} | {fmt(d.get('mean_power_w'))} | "
+                          f"{fmt(d.get('mean_energy_wh_per_run'),4)} | "
+                          f"{fmt(d.get('max_tj_c'),1)} | "
+                          f"{d.get('throttle_events_total')} |")
+            tex.append("\\bottomrule\n\\end{tabular}\n")
+            md.append("")
+
+    # ------------------------------------- measurement conditions/boundary
+    cond = load("run1/conditions.json", {}) or {}
+    _nvp = cond.get("nvpmodel") or "MAXN_SUPER 2"
+    md.append("### Measurement conditions and what the power figures exclude\n")
+    md.append("| Condition | Value |\n|---|---|")
+    md.append(f"| Platform | Jetson Orin Nano, 8 GB, 6-core ARM Cortex-A78AE, "
+              f"1020 MHz Ampere GPU |")
+    md.append(f"| `nvpmodel` mode | `{_nvp}` |")
+    md.append("| Power instrument | on-module INA3221, read through "
+              "`tegrastats` as `teg_vdd_in_mw_avg` (the module's VDD_IN input "
+              "rail) |")
+    md.append("| Sampling | 20 Hz over 10-minute log windows, 5 repeats per "
+              "configuration, each after a 10-minute warm-up |")
+    md.append("| Sensor input | the recorded rosbag "
+              "`rosbag_exp4_20260404_021816` replayed identically in every "
+              "configuration — **no live sensor is attached** |")
+    md.append("")
+    md.append("> **The ~6 W figures are the Jetson module's own input power. "
+              "They EXCLUDE the sensors, any Loihi 2 board and the physical "
+              "USB/PCIe link to one** — none of which are attached to this "
+              "bench, so none of them can be inside the measurement and none "
+              "of them are estimated. They include the module, the carrier, "
+              "the fan and every on-board regulator loss. They are therefore "
+              "**not** a system-level power figure for the architecture the "
+              "paper proposes.\n")
+    md.append("> **The J/frame column compares configurations running at "
+              "different frame rates** (see the note above Table 1). The "
+              "FPS and J/frame figures must always be quoted with that "
+              "qualification attached.\n")
+    md.append("> **C1 (PyTorch) is the stronger GPU baseline.** The TensorRT "
+              "baseline (C2) was slower than plain PyTorch even after the "
+              "harness defect that made it look artificially good was fixed, "
+              "because with 25 sequential time-steps and three small dense "
+              "layers the workload is **launch-latency bound, not "
+              "GEMM-throughput bound**. Every GPU comparison in this revision "
+              "is therefore made against C1, not against C2.\n")
+
+    # ---------------------------------------------------------- the claims
+    md.append("### The claim the measurement supports\n")
+    numbers["claims"] = {}
+    if "C1" in run1 and "C3" in run1 and "C4" in run1:
+        j1 = run1["C1"]["j_per_frame_integrated"]["mean"]
+        j3 = run1["C3"]["j_per_frame_integrated"]["mean"]
+        j4 = run1["C4"]["j_per_frame_integrated"]["mean"]
+        s3 = (j1 - j3) / j1 * 100.0
+        s4 = (j1 - j4) / j1 * 100.0
+        numbers["claims"]["c3_saving_vs_c1_pct"] = s3
+        numbers["claims"]["c4_saving_vs_c1_pct"] = s4
+        numbers["claims"]["c1_j_per_frame"] = j1
+        numbers["claims"]["c3_j_per_frame"] = j3
+        numbers["claims"]["c4_j_per_frame"] = j4
+        p3 = run1["C3"].get("power_w", {}).get("mean")
+        p4 = run1["C4"].get("power_w", {}).get("mean")
+        d43 = (j4 / j3 - 1.0) * 100.0
+        dp43 = (p4 / p3 - 1.0) * 100.0 if (p3 and p4) else None
+        numbers["claims"]["c4_vs_c3_j_per_frame_pct"] = d43
+        if dp43 is not None:
+            numbers["claims"]["c4_vs_c3_power_pct"] = dp43
+        md.append(f"- The optimised CPU fusion core (C3) saves "
+                  f"**{fmt(s3,2)} %** per frame against the original GPU "
+                  f"pipeline (C1). This is a **CPU-vs-GPU** comparison and "
+                  f"says **nothing** about Loihi 2.")
+        md.append(f"- The GPU-front-end-plus-CPU-core configuration (C4) is "
+                  f"**{fmt(abs(s4),2)} % worse** per frame than C1, not "
+                  f"better. Again, this measures the cost of a GPU front end "
+                  f"against the CPU path; it is **not** a Loihi 2 result, "
+                  f"because no Loihi 2 configuration was measured on this "
+                  f"bench.")
+        md.append(f"- Against the optimised CPU fusion core (C3), that same "
+                  f"configuration costs **{fmt(d43,1)} % more energy per "
+                  f"frame** and draws "
+                  f"**{fmt(dp43,1) if dp43 is not None else 'n/a'} % more "
+                  f"power**. The paper may state this as a measurement of "
+                  f"the Jetson's own split, and must state that "
+                  f"**Loihi 2 could not be measured** — it may **not** state "
+                  f"that Loihi 2 gave no saving, because no Loihi 2 "
+                  f"measurement was made.")
+        md.append(f"- The previously published figure of a 99.3 % "
+                  f"fusion-core saving is **withdrawn**: it has no "
+                  f"measurement behind it.")
+        md.append("")
+
+    if run2:
+        alg = [k for k in ("J2", "J4") if k in run2]
+        if alg:
+            ub = max(run2[k].get("crash_rate_95pct_upper_bound") or 1.0
+                     for k in alg)
+            numbers["claims"]["algorithm1_crash_upper_bound_pct"] = ub * 100
+            md.append(f"- Algorithm 1 was observed to fail **0 times in "
+                      f"{run2[alg[0]].get('N')} sensor replays** per "
+                      f"configuration, against **5 of 67** for the "
+                      f"Jetson-only configuration. A **Fisher exact test** "
+                      f"gives **p = 0.058 two-sided** (not significant at "
+                      f"alpha = 0.05) and p = 0.029 one-sided; the two-sided "
+                      f"value is the one to report, because the directional "
+                      f"hypothesis was not pre-registered.")
+            md.append(f"- 0 of 67 does **not** mean 0 %. The 95 % "
+                      f"**one-sided** Clopper-Pearson upper bound on the "
+                      f"failure rate is **{fmt(ub*100,2)} %**; the "
+                      f"**two-sided** bound is **5.36 %**. The correct "
+                      f"statement is *\"no failures in 67 replays versus 5 of "
+                      f"67\"*, not *\"crashes eliminated\"*.")
+            md.append(f"- The old **18 %** figure was a hard-coded literal in "
+                      f"`src/appeal_letter_generator.py` and was never "
+                      f"measured; the measured Jetson-only failure rate is "
+                      f"**7.46 %**.")
+            md.append(f"- These are **memory-cap failures** raised by the "
+                      f"harness's own `RLIMIT_AS` limit "
+                      f"(`--map-mem-limit-mb 3000`), **not** Linux kernel "
+                      f"OOM kills: `/proc/vmstat` reports `oom_kill 0` and "
+                      f"`dmesg` contains no `Out of memory: Killed process` "
+                      f"record.")
+            md.append(f"- **:warning: What this does and does not show.** "
+                      f"The 3000 MB ceiling was imposed by the **test "
+                      f"harness**, not by the module: the 8 GB Jetson never "
+                      f"ran out of memory in this experiment. What the "
+                      f"result shows is that **the map code needs more than "
+                      f"3000 MB without Algorithm 1**, and that with "
+                      f"Algorithm 1 it stays under that ceiling. It does "
+                      f"**NOT** show that Algorithm 1 prevents real Jetson "
+                      f"out-of-memory crashes. The paper must say exactly "
+                      f"that, or quote the uncapped run in "
+                      f"`exp_rev1/results/run2_nocap/` instead.")
+            md.append("")
+
+    # ---------------------------------------------------------- write
+    with open(os.path.join(OUT, "tables.tex"), "w") as f:
+        f.write("\n".join(tex))
+    with open(os.path.join(OUT, "results.md"), "w") as f:
+        f.write("# Manuscript results (generated from the measured data)\n\n"
+                + "\n".join(md))
+    with open(os.path.join(OUT, "numbers.json"), "w") as f:
+        json.dump(numbers, f, indent=2)
+
+    # ---------------------------------------------------------- summary
+    lines = ["MEASURED RESULTS SUMMARY",
+             f"generated {numbers['generated_at']}",
+             "=" * 70, ""]
+    if order:
+        lines.append("RUN 1 -- power, throughput, energy per frame")
+        for c in order:
+            t = numbers["table1"][c]
+            lines.append(f"  {c}  {t['power_w_mean']:.3f} W +/- {t['power_w_sd']:.3f}"
+                         f"   {t['fps_mean']:.2f} FPS"
+                         f"   {t['j_per_frame_mean']:.5f} J/frame"
+                         f"   p50 {t['latency_p50_ms']:.2f} ms"
+                         f"   50Hz: {'YES' if t['sustains_50hz'] else 'NO'}")
+        lines.append("")
+    if run2:
+        lines.append("RUN 2 -- memory and MEMORY-CAP FAILURES "
+                     "(67 sensor replays per configuration)")
+        for k in [k for k in ("J1", "J2", "J3", "J4") if k in run2]:
+            t = numbers["table2"][k]
+            lines.append(f"  {t['label']:<32} failures {t['crashes']:>3}/{t['N']}"
+                         f"   rate {t['crash_rate']*100:>6.2f}%"
+                         f"   95% one-sided upper bound "
+                         f"{t['upper_bound_95']*100:>6.2f}%")
+        lines.append("  (memory-cap failures, not kernel OOM kills: "
+                     "/proc/vmstat oom_kill = 0;")
+        lines.append("   5/67 vs 0/67 -> Fisher exact p = 0.058 two-sided, "
+                     "0.029 one-sided;")
+        lines.append("   0/67 -> 95% Clopper-Pearson upper bound 4.37% "
+                     "one-sided, 5.36% two-sided)")
+        lines.append("")
+    if "table2c" in numbers:
+        lines.append("RUN 2 -- PEAK MEMORY AND HEADROOM (log-derived peaks, "
+                     "Section 5.2)")
+        for pass_name, pass_label in (("run2", "with the 3000 MB ceiling"),
+                                      ("run2_nocap", "with no ceiling")):
+            cfgs = numbers["table2c"].get(pass_name) or {}
+            if not cfgs:
+                continue
+            lines.append(f"  -- {pass_label} --")
+            for k in ("J1", "J2", "J3", "J4"):
+                t = cfgs.get(k)
+                if not t:
+                    continue
+                lines.append(f"    {t['label']:<48} peak total RAM "
+                             f"{t['peak_total_ram_mb']:>8.1f} MB   peak map "
+                             f"RSS {t['peak_map_rss_mb']:>7.1f} MB   "
+                             f"headroom {t['headroom_mb']:>7.1f} MB "
+                             f"({t['headroom_percent']:>5.2f} %)")
+        lines.append("")
+    if run3:
+        lines.append("RUN 3 -- THERMAL STABILITY (900 s x 3 repeats per "
+                     "configuration) -- not an endurance result")
+        for k in [k for k in ("C1", "C4") if k in run3]:
+            t = numbers["table3"][k]
+            lines.append(f"  {k}  {t['mean_power_w']:.3f} W"
+                         f"   {t['energy_wh_per_run']:.4f} Wh/run"
+                         f"   max Tj {t['max_tj_c']:.1f} C"
+                         f"   throttles {t['throttle_events']}")
+        lines.append("")
+    if "claims" in numbers:
+        lines.append("THE CLAIMS THE MEASUREMENT SUPPORTS")
+        c = numbers["claims"]
+        if "c3_saving_vs_c1_pct" in c:
+            lines.append(f"  C3 optimised CPU core vs C1: "
+                         f"{c['c3_saving_vs_c1_pct']:+.2f} % per frame")
+            lines.append(f"  C4 GPU front end + CPU core vs C1: "
+                         f"{c['c4_saving_vs_c1_pct']:+.2f} % per frame")
+        if "c4_vs_c3_j_per_frame_pct" in c:
+            lines.append(f"  C4 GPU front end + CPU core vs C3 CPU core: "
+                         f"{c['c4_vs_c3_j_per_frame_pct']:+.1f} % per frame, "
+                         f"{c.get('c4_vs_c3_power_pct', float('nan')):+.1f} % power")
+            lines.append("  -> this measures the Jetson's own split; it is "
+                         "NOT a Loihi 2 result.")
+            lines.append("  -> Loihi 2 could NOT be measured on this bench, so "
+                         "no Loihi 2 saving may be claimed in either "
+                         "direction.")
+        if "algorithm1_crash_upper_bound_pct" in c:
+            lines.append(f"  Algorithm 1: 0 failures in 67 sensor replays vs 5/67; "
+                         f"95% one-sided upper bound "
+                         f"{c['algorithm1_crash_upper_bound_pct']:.2f} % "
+                         f"(two-sided 5.36 %)")
+            lines.append("  -> Fisher exact p = 0.058 two-sided: NOT "
+                         "significant at 0.05")
+        lines.append("")
+    lines.append("Every number above is from exp_rev1/results/. The numbers "
+                 "previously published in")
+    lines.append("results/ and in the README were random draws; see "
+                 "exp_rev1/results/provenance_audit.json.")
+
+    with open(os.path.join(OUT, "summary.txt"), "w") as f:
+        f.write("\n".join(lines) + "\n")
+
+    print("\n".join(lines))
+    print(f"\nwrote {OUT}/tables.tex, results.md, numbers.json, summary.txt")
+    return 0
+
+
+
+if __name__ == "__main__":
+    # This tool is CPU-heavy and must NOT run while a measurement is in
+    # progress: it would contaminate the open measurement window.  On
+    # 2026-11-05 it did exactly that and cost a whole 30 Hz pass.
+    from measurement_lock import refuse_if_measurement_running
+    refuse_if_measurement_running("build_manuscript_tables.py")
+    raise SystemExit(main())

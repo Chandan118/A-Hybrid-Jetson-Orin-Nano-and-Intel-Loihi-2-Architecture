@@ -1,4 +1,24 @@
 # Experiment Configuration
+#
+# ############################################################################
+# #  THIS CONFIGURATION DESCRIBES THE SYNTHETIC EXPERIMENTS.               #
+# #  It is NOT the configuration of the measurements in exp_rev1/.          #
+# #                                                                          #
+# #  The scripts under src/ read this file and produce their results from  #
+# #  np.random -- they never read the Jetson power rails, the INA3221,      #
+# #  tegrastats, or any external meter.  Every figure the config drives    #
+# #  (the 50 trials, the 30-minute durations, the 4.5-hour stress test,    #
+# #  the 20 battery cycles) is therefore an aspiration or a simulation,    #
+# #  not a measurement.                                                     #
+# #                                                                          #
+# #  The measured configuration is in exp_rev1/ and the measured results   #
+# #  are in exp_rev1/results/.  See exp_rev1/results/provenance_audit.json #
+# #  and exp_rev1/results/REVIEW_RESPONSE.md.                              #
+# #                                                                          #
+# #  This file is kept unchanged on purpose: it is the evidence for the    #
+# #  provenance finding.                                                     #
+# ############################################################################
+
 
 # Incremental Map Compression
 compression:

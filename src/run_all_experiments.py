@@ -1,5 +1,25 @@
 #!/usr/bin/env python3
 """
+#############################################################################
+# WARNING: THE VALUES THIS SCRIPT PRODUCES ARE NOT MEASUREMENTS.
+#
+# This script injects values from `np.random` into the results it writes.
+# It never reads the Jetson power rails, the INA3221, tegrastats, or any
+# external meter, so the power, the frame times, the FPS and the
+# joules-per-frame it reports are random draws, not observations.
+#
+# It is kept in the repository because it is the EVIDENCE for the provenance
+# finding in exp_rev1/results/provenance_audit.json -- which shows that the
+# numbers published in results/ and in the README key-results table were
+# generated rather than measured, and that their energy identity is violated
+# by 979 % to 1732 %.
+#
+# The real measurements are produced by the harness in exp_rev1/ and are
+# documented in exp_rev1/results/REVIEW_RESPONSE.md.  Do not cite anything
+# this script produces as a result, and do not let its output overwrite the
+# measured files.
+#############################################################################
+
 Master Experiment Runner
 ========================
 
@@ -9,6 +29,7 @@ This is the main entry point to execute the complete experimental validation.
 Usage:
     python3 run_all_experiments.py
 """
+
 
 import os
 import sys
@@ -57,7 +78,8 @@ class ExperimentRunner:
         Experiment 1: Incremental Map Compression Physical Validation
         """
         self.print_header("EXPERIMENT 1: INCREMENTAL MAP COMPRESSION VALIDATION")
-        print("\nObjective: Prove OOM crash rate drops from 18% to 0%")
+        print("\nObjective: Measure the memory-cap failure rate with and "
+              "without Algorithm 1")
         print(f"Configuration: {num_trials} trials × 30 minutes = {num_trials * 30 / 60:.1f} hours")
         print("\nRunning physical trials...")
         
